@@ -27,7 +27,7 @@ class Spider:
 		if len(self.queue) > 0:
 			url = self.polling()
 			grams = self.extract(url)
-			print "Stepping {}".format(url)
+			print "Stepping ", url
 			to_db = [(url, " ".join(grams))]
 			self.cur.executemany("INSERT INTO t (url, grams) VALUES (?, ?);", to_db)
 			self._connection.commit()
@@ -63,7 +63,7 @@ class Spider:
 		return full_links + internal_links
 
 if __name__ == '__main__':
-	url = 'http://www.jaeminjo.com/'
+	url = 'https://github.com/dandelin/CorpusMaker'
 	base_urls = [urlparse(url).netloc]
-	spider = Spider(url, base_urls, 'jaeminjo.db', 0.1)
+	spider = Spider(url, base_urls, 'cr.db', 0.1)
 	spider.nstep(100000)

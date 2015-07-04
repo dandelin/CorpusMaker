@@ -10,4 +10,4 @@ def combine(db_name):
 		fp.write(' '.join(grams))
 
 if __name__ == "__main__":
-	combine('jaeminjo.db')
+	combine('cr.db')
