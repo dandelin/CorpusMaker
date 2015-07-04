@@ -4,7 +4,7 @@ from lxml import html
 from urlparse import urlparse
 
 class Spider:
-	def __init__(self, start_url, base_urls, db_name):
+	def __init__(self, start_url, base_urls, db_name, timer=0.5):
 		self.extracted = set()
 		self.queue = set([start_url])
 		self.base_urls = set(base_urls)
@@ -12,6 +12,7 @@ class Spider:
 		self.cur = self._connection.cursor()
 		sql = "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, url TEXT, grams TEXT);"
 		self.cur.execute(sql)
+		self.timer = timer
 	def not_yet_extracted(self, urls):
 		return [url for url in urls if not url in self.extracted]
 	def extract(self, url):
@@ -39,25 +40,30 @@ class Spider:
 			grams = self.step()
 			if grams == []:
 				self._connection.close()
+				print "Crawling Finished"
 				break
-			time.sleep(0.5)
+			time.sleep(self.timer)
 		self._connection.close()
 	def extract_multilingual(self, url):
-		text = requests.get(url).text
-		body = html.fromstring(text)
+		content = requests.get(url).content
+		body = html.fromstring(content)
 		texts = body.xpath("//*/text()")
 		texts = [text for text in texts if regex.search(ur'\p{Hangul}+', text) or regex.fullmatch(r'[\w\s]+', text)]
 		texts = [regex.findall(ur'\p{Hangul}+\.?|\p{Latin}+\.?', text) for text in texts]
 		texts = [unicode(t) for text in texts for t in text]
 		return texts
 	def extract_links(self, url, base_urls):
-		text = requests.get(url).text
-		body = html.fromstring(text)
-		links = [link for link in body.xpath("//a/@href") if urlparse(link).netloc in base_urls]
-		return links
+		content = requests.get(url).content
+		body = html.fromstring(content)
+		links = body.xpath("//a/@href")
+		full_links = [link for link in links if urlparse(link).netloc in base_urls]
+		cur_parse = urlparse(url)
+		cur_base = cur_parse.scheme + '://' + cur_parse.netloc
+		internal_links = [cur_base + link for link in links if urlparse(link).netloc == '']
+		return full_links + internal_links
 
 if __name__ == '__main__':
 	url = 'http://www.jaeminjo.com/'
 	base_urls = [urlparse(url).netloc]
-	spider = Spider(url, base_urls, 'jaeminjo.db')
+	spider = Spider(url, base_urls, 'jaeminjo.db', 0.1)
 	spider.nstep(100000)
