@@ -1,8 +1,8 @@
 #-*- coding: utf-8 -*-
-import requests, regex, time, sqlite3
+import requests, regex, time, sqlite3, difflib
 from lxml import html
 from libextract.api import extract
-from urlparse import urlparse
+from urlparse import urlparse, urljoin
 
 class Spider:
 	def __init__(self, start_url, base_urls, db_name, timer=0.5):
@@ -34,69 +34,62 @@ class Spider:
 			self._connection.commit()
 			return grams
 		else:
-			return []
+			return None
 	def nstep(self, n=1):
 		for i in xrange(n):
 			print "Step #{}".format(i)
 			grams = self.step()
-			if grams == []:
+			if grams == None:
 				self._connection.close()
-				print "Crawling Finished"
-				break
+				print "Queue is Empty"
+				return
 			time.sleep(self.timer)
 		self._connection.close()
 	def extract_multilingual(self, url):
 		texts = []
 		r = requests.get(url)
 		if r.status_code == 200:
-			textnodes = list(extract(r.content))
+			textnodes = list(extract(r.content, count=5))
 			texts = [textnode.text_content() for textnode in textnodes]
 			texts = [regex.findall(ur'\p{Hangul}+\.?|\p{Latin}+\.?', text) for text in texts]
 			texts = [unicode(t) for text in texts for t in text]
 		return texts
-
 	def extract_links(self, url, base_urls):
 		content = requests.get(url).content
 		body = html.fromstring(content)
 		links = body.xpath("//a/@href")
-		full_links = [link for link in links if urlparse(link).netloc in base_urls]
+		full_links = [link for link in links if urlparse(link).netloc in base_urls and urlparse(link).scheme in ['http', 'https']]
 		cur_parse = urlparse(url)
 		cur_base = cur_parse.scheme + '://' + cur_parse.netloc
-		internal_links = [cur_base + link for link in links if urlparse(link).netloc == '' and link.startswith('/')]
+		internal_links = [urljoin(cur_base, link) for link in links if urlparse(link).netloc == '' and not link.startswith('#') and urlparse(link).scheme == '']
 		return full_links + internal_links
 
-def lcs(a, b):
-	lengths = [[0 for j in range(len(b)+1)] for i in range(len(a)+1)]
-	# row 0 and column 0 are initialized to 0 already
-	for i, x in enumerate(a):
-		for j, y in enumerate(b):
-			if x == y:
-				lengths[i+1][j+1] = lengths[i][j] + 1
-			else:
-				lengths[i+1][j+1] = max(lengths[i+1][j], lengths[i][j+1])
-	# read the substring out from the matrix
-	result = ""
-	x, y = len(a), len(b)
-	while x != 0 and y != 0:
-		if lengths[x][y] == lengths[x-1][y]:
-			x -= 1
-		elif lengths[x][y] == lengths[x][y-1]:
-			y -= 1
-		else:
-			assert a[x-1] == b[y-1]
-			result = a[x-1] + result
-			x -= 1
-			y -= 1
-	return result
+def noise_extractor(url, base_urls):
+	content = requests.get(url).content
+	body = html.fromstring(content)
+	links = body.xpath("//a/@href")
+	full_links = [link for link in links if urlparse(link).netloc in base_urls and urlparse(link).scheme in ['http', 'https']]
+	cur_parse = urlparse(url)
+	cur_base = cur_parse.scheme + '://' + cur_parse.netloc
+	internal_links = [urljoin(cur_base, link) for link in links if urlparse(link).netloc == '' and not link.startswith('#') and urlparse(link).scheme == '']
+	link_to_explore = full_links + internal_links
+	
+	sample_contents = [requests.get(url).content for url in link_to_explore[:4]] + [content]
+	textnodes = [t for content in sample_contents for t in list(extract(content, count=5))]
+	noise = set()
+	seqs = [[0 for i in xrange(len(textnodes))] for j in xrange(len(textnodes))]
+	for i in xrange(len(textnodes)):
+		t1 = textnodes[i].text_content()
+		for j in xrange(i):
+			t2 = textnodes[j].text_content()
+			seq = difflib.SequenceMatcher(None, t1, t2)
+			if seq.ratio() > 0.9:
+				noise.add(t1)
+				noise.add(t2)
+	return noise
 
-def erase_noise(db_name):
-	conn = sqlite3.connect(db_name)
-	cur = conn.cursor()
-	cur.execute("SELECT * FROM t;")
-	rows = cur.fetchall()
-	grams = [row[2] for row in rows]
-	sqaure_lcs = [[lcs(grams[i], grams[j]) for j in xrange(i)] for i in xrange(len(grams))]
-	return sqaure_lcs
+
+
 
 if __name__ == '__main__':
 	url = 'http://wonjaekim.com/'
