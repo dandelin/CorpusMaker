@@ -59,3 +59,4 @@ target/
 # Database
 *.db
 *.txt
+profit.py
