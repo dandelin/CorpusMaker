@@ -5,10 +5,11 @@ from libextract.api import extract
 from urlparse import urlparse, urljoin
 
 class Spider:
-	def __init__(self, start_url, base_urls, db_name, timer=0.5):
+	def __init__(self, start_url, base_urls, db_name, timer=0.5, rule=''):
 		self.extracted = set()
 		self.queue = set([start_url])
 		self.base_urls = set(base_urls)
+                self.rules = [base_url+rule for base_url in base_urls]
 		self._connection = sqlite3.connect(db_name)
 		self.cur = self._connection.cursor()
 		sql = "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, url TEXT, grams TEXT);"
@@ -19,6 +20,10 @@ class Spider:
 	def extract(self, url):
 		self.extracted.add(url)
 		links = self.extract_links(url, self.base_urls)
+                links_with_rule = []
+                for rule in self.rules:
+                    links_with_rule = links_with_rule + [link for link in links if rule in link]
+                links = set(links_with_rule)
 		self.queue = self.queue.union(set(self.not_yet_extracted(links)))
 		return self.extract_multilingual(url)
 	def polling(self):
