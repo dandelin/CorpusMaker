@@ -7,7 +7,7 @@ def combine(db_name):
 	rows = cur.fetchall()
 	grams = [row[2] for row in rows]
 	with codecs.open(db_name + '.txt', 'w', encoding='utf-8') as fp:
-		fp.write(' '.join(grams) + '\n')
+		fp.write('\n'.join(grams))
 
 if __name__ == "__main__":
 	combine('cr.db')

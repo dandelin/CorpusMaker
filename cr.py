@@ -1,5 +1,5 @@
 #-*- coding: utf-8 -*-
-import requests, regex, time, sqlite3, difflib
+import requests, regex, time, sqlite3, difflib, cleanhtml, re
 from lxml import html
 from libextract.api import extract
 from urlparse import urlparse, urljoin
@@ -29,7 +29,7 @@ class Spider:
 			url = self.polling()
 			print "Stepping ", url
 			grams = self.extract(url)
-			to_db = [(url, ' '.join(grams))]
+			to_db = [(url, '\n'.join(grams))]
 			self.cur.executemany("INSERT INTO t (url, grams) VALUES (?, ?);", to_db)
 			self._connection.commit()
 			return grams
@@ -49,10 +49,14 @@ class Spider:
 		texts = []
 		r = requests.get(url)
 		if r.status_code == 200:
-			textnodes = list(extract(r.content, count=5))
-			texts = [textnode.text_content() for textnode in textnodes]
-			texts = [regex.findall(ur'\p{Hangul}+\.?|\p{Latin}+\.?', text) for text in texts]
-			texts = [unicode(t) for text in texts for t in text]
+                        a = r.content
+                        b = cleanhtml.clean_html(a).lower()
+                        c = re.split(r'[\n\r.]', b)
+                        d = [re.sub(r'[^a-zA-z]+', ' ', cc) for cc in c]
+                        e = [dd.strip() for dd in d]
+                        f = [ee for ee in e if ee != '']
+                        g = [ff for ff in f if ff.count(' ')> 5]
+                        texts = g
 		return texts
 	def extract_links(self, url, base_urls):
 		content = requests.get(url).content
